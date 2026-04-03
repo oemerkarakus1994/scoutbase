@@ -5,6 +5,7 @@ import { QuickAccess } from "@/components/quick-access";
 import { RegionSelect } from "@/components/region-select";
 import { SiteHeader } from "@/components/site-header";
 import { fetchHomeDashboard } from "@/lib/home-dashboard";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 type Props = {
@@ -13,6 +14,45 @@ type Props = {
 
 export default async function Home({ searchParams }: Props) {
   const { region } = await searchParams;
+
+  if (!isSupabaseConfigured()) {
+    return (
+      <div className="flex min-h-full flex-1 flex-col bg-background">
+        <SiteHeader />
+        <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-16 sm:px-6">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+            ScoutBase
+          </h1>
+          <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+            Die Website läuft, aber die Verbindung zur Datenbank ist auf dem Server
+            nicht eingetragen. Das ist die häufigste Ursache für „Server error“ auf
+            Vercel.
+          </p>
+          <p className="mt-4 text-sm font-medium text-slate-800 dark:text-slate-200">
+            In Vercel: Project → Settings → Environment Variables → für{" "}
+            <strong>Production</strong> (und Preview) hinzufügen:
+          </p>
+          <ul className="mt-2 list-inside list-disc text-sm text-slate-600 dark:text-slate-400">
+            <li>
+              <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">
+                NEXT_PUBLIC_SUPABASE_URL
+              </code>
+            </li>
+            <li>
+              <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">
+                NEXT_PUBLIC_SUPABASE_ANON_KEY
+              </code>
+            </li>
+          </ul>
+          <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">
+            Gleiche Werte wie in <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">web/.env.local</code> auf
+            deinem Mac. Danach <strong>Redeploy</strong> auslösen.
+          </p>
+        </main>
+      </div>
+    );
+  }
+
   const supabase = await createClient();
   const dash = await fetchHomeDashboard(supabase, region);
 
