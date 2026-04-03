@@ -1,0 +1,7 @@
+.env
+.env.local
+.env.*.local
+.DS_Store
+
+# Lokale Forschungs-/Rohdaten (mehrere GB — nicht ins Repo)
+/data/
