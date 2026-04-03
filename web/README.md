@@ -33,10 +33,12 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 Die Next-App liegt im Unterordner `web/` (Monorepo). So gehst du vor:
 
+**Wichtig:** Wenn die Live-URL nur **404 NOT_FOUND** zeigt, ist fast immer das **Root Directory** falsch (Vercel baut dann nicht die Next-App). In Vercel: **Project → Settings → General → Root Directory** → **`web`** speichern, danach **Deployments → … → Redeploy**.
+
 1. **GitHub:** Dieses Repository pushen (oder verbundenes Repo nutzen).
 2. **[vercel.com](https://vercel.com)** → *Add New…* → *Project* → Repository importieren.
 3. **Root Directory** auf **`web`** setzen (Framework *Next.js* sollte erkannt werden).  
-   Ohne diesen Schritt findet Vercel kein `package.json` der App.
+   Ohne diesen Schritt findet Vercel kein `package.json` der App und die Seite bleibt leer (**404**).
 4. **Environment Variables** (Production + Preview):
 
    | Name | Wert |
