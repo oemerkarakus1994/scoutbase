@@ -1,9 +1,14 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import type { NextConfig } from "next";
+
+/** Ordner dieser Datei (`web/`) — gleicher Bezug wie Vercels `outputFileTracingRoot`, vermeidet Warnungen. */
+const webRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   turbopack: {
-    // Avoid picking a parent folder when multiple package-lock files exist.
-    root: process.cwd(),
+    root: webRoot,
   },
   images: {
     remotePatterns: [
