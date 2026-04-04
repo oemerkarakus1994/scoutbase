@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { resolvePersonFotoPublicUid } from "./oefb-assets";
 import { bundeslandFromVerbandName } from "./oefb-bundesland";
 import { fetchAllActiveMembershipsForTeams, isStaffRole } from "./sfv-data";
 
@@ -206,6 +207,7 @@ export async function fetchSfvTrainerDirectory(
       vorname: string | null;
       nachname: string | null;
       foto_public_uid: string | null;
+      meta: unknown;
     }> = [];
 
     for (let i = 0; i < personIds.length; i += PERSON_CHUNK) {
@@ -213,7 +215,7 @@ export async function fetchSfvTrainerDirectory(
       const { data, error: eP } = await supabase
         .schema("core")
         .from("personen")
-        .select("id,display_name,vorname,nachname,foto_public_uid")
+        .select("id,display_name,vorname,nachname,foto_public_uid,meta")
         .in("id", chunk);
       if (eP) {
         return { data: [], error: new Error(eP.message) };
@@ -316,12 +318,12 @@ export async function fetchSfvTrainerDirectory(
     const rows: SfvTrainerDirectoryRow[] = [];
 
     for (const p of persons) {
-      const meta = picked.get(p.id);
-      if (!meta) {
+      const trainerPick = picked.get(p.id);
+      if (!trainerPick) {
         continue;
       }
-      const tm = teamMap.get(meta.team_id);
-      const teamFull = teamById.get(meta.team_id);
+      const tm = teamMap.get(trainerPick.team_id);
+      const teamFull = teamById.get(trainerPick.team_id);
       const vn = tm?.verein_id
         ? (vereinName.get(tm.verein_id) ?? "")
         : "";
@@ -350,8 +352,11 @@ export async function fetchSfvTrainerDirectory(
         verein_name: vn || "—",
         team_name: teamName,
         verein_team: vereinTeam,
-        role_label: meta.role_label,
-        foto_public_uid: p.foto_public_uid ?? null,
+        role_label: trainerPick.role_label,
+        foto_public_uid: resolvePersonFotoPublicUid(
+          p.foto_public_uid,
+          p.meta,
+        ),
         region_label: region,
         liga_label: liga,
         license_label: fakeUefaLicenseForPersonId(p.id),

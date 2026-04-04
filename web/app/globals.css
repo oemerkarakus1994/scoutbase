@@ -2,25 +2,39 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Kein next-themes: `<html class="dark">` in layout.tsx — festes dunkles Rot-Layout */
+html.dark {
+  color-scheme: dark;
+}
+
+/* Dashboard: kräftiges Rot als Marke; Hell = hellgrau + Rot, Dunkel = tiefes Rot-Schwarz */
 :root {
   --background: #f4f4f5;
   --foreground: #0f172a;
   --card: #ffffff;
   --border: #e2e8f0;
   --muted: #64748b;
-  /* Figma-nahes Grün */
-  --brand: #16a34a;
+  --brand: #b91c1c;
   --brand-foreground: #ffffff;
+  --sidebar: #fdf2f2;
+  --panel: #fef2f2;
+  --panel-elevated: #fce8e8;
+  --ring-brand: rgba(185, 28, 28, 0.38);
 }
 
+/* Immer aktiv (forcedTheme=dark): tiefes Rot-Schwarz, kräftige Marke */
 .dark {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --card: #1e293b;
-  --border: #334155;
-  --muted: #94a3b8;
-  --brand: #22c55e;
-  --brand-foreground: #0f172a;
+  --background: #060405;
+  --foreground: #f5f0f1;
+  --card: #100a0c;
+  --border: #422428;
+  --muted: #b09ea2;
+  --brand: #f43f5e;
+  --brand-foreground: #ffffff;
+  --sidebar: #0a0507;
+  --panel: #140e11;
+  --panel-elevated: #1c1317;
+  --ring-brand: rgba(244, 63, 94, 0.5);
 }
 
 @theme inline {
@@ -31,6 +45,9 @@
   --color-muted: var(--muted);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-panel: var(--panel);
+  --color-panel-elevated: var(--panel-elevated);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -38,4 +55,18 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/*
+ * Profil-Popups: ca. 70 % Viewport-Breite, nie breiter als die Hauptspalte.
+ */
+@layer utilities {
+  .max-w-profile-modal {
+    max-width: min(70vw, calc(min(1400px, 100vw) - 2rem));
+  }
+  @media (min-width: 640px) {
+    .max-w-profile-modal {
+      max-width: min(70vw, calc(min(1400px, 100vw) - 3rem));
+    }
+  }
 }

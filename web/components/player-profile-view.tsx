@@ -2,13 +2,18 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { PlayerCompareModal } from "@/components/player-compare-modal";
+import { ProfilePreviewLink } from "@/components/profile-preview-link";
 import { cn } from "@/lib/cn";
-import { buildOefbPlayerPhotoUrl } from "@/lib/oefb-assets";
-import type {
-  ProfileKmResLine,
-  SfvPlayerProfileData,
+import { buildPlayerPhotoUrlCandidates } from "@/lib/oefb-assets";
+import {
+  compareSeasonKeysDesc,
+  emptyProfileStatsTables,
+  pastSeasonLabelsBefore,
+  type ProfileKmResLine,
+  type SfvPlayerProfileData,
 } from "@/lib/sfv-player-profile";
 import {
   type PitchSlotId,
@@ -148,20 +153,111 @@ function footLabel(
 
 type TabId = "overview" | "stats" | "history";
 
-function buildSeasonOptions(): { value: string; label: string }[] {
-  const y = new Date().getFullYear();
-  const mo = new Date().getMonth();
-  const start = mo >= 6 ? y : y - 1;
+function CurrentSeasonStatsTable({
+  verein_name,
+  liga_label,
+  line,
+}: {
+  verein_name: string;
+  liga_label: string | null;
+  line: ProfileKmResLine;
+}) {
+  return (
+    <div className="inline-block w-max max-w-full rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/80 dark:bg-slate-800/40">
+      <table className="w-max max-w-full border-collapse text-left text-[13px]">
+        <thead>
+          <tr className="border-b border-slate-200 bg-white text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-700/80 dark:bg-slate-800/60">
+            <th className="whitespace-nowrap py-2.5 pl-3 pr-4 text-left sm:pr-6">
+              Verein
+            </th>
+            <th className="max-w-[14rem] whitespace-normal py-2.5 pr-4 text-left sm:pr-6">
+              Liga
+            </th>
+            <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+              Einsätze
+            </th>
+            <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+              Tore
+            </th>
+            <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+              Einw.
+            </th>
+            <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+              Ausw.
+            </th>
+            <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+              Gelb
+            </th>
+            <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+              Gelb-Rot
+            </th>
+            <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+              Rot
+            </th>
+            <th className="whitespace-nowrap py-2.5 pl-2 pr-3 text-right tabular-nums sm:pr-4">
+              Ø Min.
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="text-slate-700 dark:text-slate-200">
+            <td className="py-2.5 pl-3 pr-4 font-medium sm:pr-6">
+              {verein_name}
+            </td>
+            <td className="max-w-[14rem] py-2.5 pr-4 text-slate-600 dark:text-slate-400 sm:pr-6">
+              {liga_label ?? "—"}
+            </td>
+            <td className="px-2 py-2.5 text-right tabular-nums">
+              {line.appearances}
+            </td>
+            <td className="px-2 py-2.5 text-right tabular-nums text-brand">
+              {line.goals}
+            </td>
+            <td className="px-2 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">
+              {line.subs_in || "—"}
+            </td>
+            <td className="px-2 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">
+              {line.subs_out || "—"}
+            </td>
+            <td className="px-2 py-2.5 text-right tabular-nums">
+              {line.yellow}
+            </td>
+            <td className="px-2 py-2.5 text-right tabular-nums">
+              {line.yellow_red}
+            </td>
+            <td className="px-2 py-2.5 text-right tabular-nums">
+              {line.red}
+            </td>
+            <td className="py-2.5 pl-2 pr-3 text-right tabular-nums text-slate-500 dark:text-slate-400 sm:pr-4">
+              {line.avg_minutes != null
+                ? `${Math.round(line.avg_minutes)}`
+                : "—"}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function buildSeasonOptionsFromProfile(profile: SfvPlayerProfileData): {
+  value: string;
+  label: string;
+}[] {
+  const sk = profile.statsTables.dataSeasonKey;
+  const fromTables = Object.keys(profile.statsTablesBySeason ?? {});
+  const pastFive = pastSeasonLabelsBefore(sk, 5);
+  const keys = [...new Set([...fromTables, ...pastFive])].sort(
+    compareSeasonKeysDesc,
+  );
   const list: { value: string; label: string }[] = [
     { value: "__current__", label: "Aktuelle Saison" },
   ];
-  for (let i = 0; i < 6; i++) {
-    const s = start - i;
-    const key = `${s}/${(s + 1).toString().slice(2)}`;
-    if (i === 0) {
+  for (const k of keys) {
+    if (k === sk) {
       continue;
     }
-    list.push({ value: key, label: key });
+    list.push({ value: k, label: k });
   }
   return list;
 }
@@ -199,6 +295,8 @@ function StatsKmResTable({
   block,
   hasData,
   cupMode,
+  currentColumnLabel = "aktuelle Saison",
+  showTotalColumns = true,
 }: {
   title: string;
   titleClassName: string;
@@ -209,9 +307,14 @@ function StatsKmResTable({
   hasData: boolean;
   /** Cup: leere Cup-Zeilen als „—“ */
   cupMode?: boolean;
+  /** Erste Spaltengruppe (gewählte Saison vs. Gesamt) */
+  currentColumnLabel?: string;
+  /** Bei früherer Einzelsaison: nur KM/Res dieser Saison, ohne „Gesamt“. */
+  showTotalColumns?: boolean;
 }) {
   const c = block.current;
   const g = block.total;
+  const showTotal = showTotalColumns;
 
   function goalsCell(line: ProfileKmResLine, show: boolean) {
     if (!show) {
@@ -239,7 +342,12 @@ function StatsKmResTable({
         {title}
       </h3>
       <div className="overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/80 dark:bg-slate-800/40">
-        <table className="w-full min-w-[640px] border-collapse text-[13px]">
+        <table
+          className={cn(
+            "w-full border-collapse text-[13px]",
+            showTotal ? "min-w-[640px]" : "min-w-[320px]",
+          )}
+        >
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-700/80 dark:bg-slate-800/60">
               <th
@@ -247,17 +355,23 @@ function StatsKmResTable({
                 rowSpan={2}
               />
               <th className="px-1 py-2 text-center" colSpan={2}>
-                aktuelle Saison
+                {currentColumnLabel}
               </th>
-              <th className="px-1 py-2 text-center" colSpan={2}>
-                Gesamt
-              </th>
+              {showTotal ? (
+                <th className="px-1 py-2 text-center" colSpan={2}>
+                  Gesamt
+                </th>
+              ) : null}
             </tr>
             <tr className="border-b border-slate-200 bg-white text-[10px] font-semibold text-slate-600 dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-400">
               <th className="px-2 py-1.5">KM</th>
               <th className="px-2 py-1.5">Res</th>
-              <th className="px-2 py-1.5">KM</th>
-              <th className="px-2 py-1.5">Res</th>
+              {showTotal ? (
+                <>
+                  <th className="px-2 py-1.5">KM</th>
+                  <th className="px-2 py-1.5">Res</th>
+                </>
+              ) : null}
             </tr>
           </thead>
           <tbody className="text-slate-700 dark:text-slate-200">
@@ -271,12 +385,16 @@ function StatsKmResTable({
               <td className="px-2 py-2.5 text-center tabular-nums">
                 {fmtInt(c.res.appearances, hasData)}
               </td>
-              <td className="px-2 py-2.5 text-center tabular-nums">
-                {fmtInt(g.km.appearances, hasData)}
-              </td>
-              <td className="px-2 py-2.5 text-center tabular-nums">
-                {fmtInt(g.res.appearances, hasData)}
-              </td>
+              {showTotal ? (
+                <>
+                  <td className="px-2 py-2.5 text-center tabular-nums">
+                    {fmtInt(g.km.appearances, hasData)}
+                  </td>
+                  <td className="px-2 py-2.5 text-center tabular-nums">
+                    {fmtInt(g.res.appearances, hasData)}
+                  </td>
+                </>
+              ) : null}
             </tr>
             <tr className="border-b border-slate-100 dark:border-slate-700/80">
               <td className="px-2 py-2.5 text-slate-500 dark:text-slate-400">
@@ -288,12 +406,16 @@ function StatsKmResTable({
               <td className="px-2 py-2.5 text-center tabular-nums">
                 {fmtInt(c.res.minutes, hasData)}
               </td>
-              <td className="px-2 py-2.5 text-center tabular-nums">
-                {fmtInt(g.km.minutes, hasData)}
-              </td>
-              <td className="px-2 py-2.5 text-center tabular-nums">
-                {fmtInt(g.res.minutes, hasData)}
-              </td>
+              {showTotal ? (
+                <>
+                  <td className="px-2 py-2.5 text-center tabular-nums">
+                    {fmtInt(g.km.minutes, hasData)}
+                  </td>
+                  <td className="px-2 py-2.5 text-center tabular-nums">
+                    {fmtInt(g.res.minutes, hasData)}
+                  </td>
+                </>
+              ) : null}
             </tr>
             <tr className="border-b border-slate-100 dark:border-slate-700/80">
               <td className="px-2 py-2.5 text-slate-500 dark:text-slate-400">
@@ -305,12 +427,16 @@ function StatsKmResTable({
               <td className="px-2 py-2.5 text-center tabular-nums">
                 {fmtAvg(c.res.avg_minutes, hasData)}
               </td>
-              <td className="px-2 py-2.5 text-center tabular-nums">
-                {fmtAvg(g.km.avg_minutes, hasData)}
-              </td>
-              <td className="px-2 py-2.5 text-center tabular-nums">
-                {fmtAvg(g.res.avg_minutes, hasData)}
-              </td>
+              {showTotal ? (
+                <>
+                  <td className="px-2 py-2.5 text-center tabular-nums">
+                    {fmtAvg(g.km.avg_minutes, hasData)}
+                  </td>
+                  <td className="px-2 py-2.5 text-center tabular-nums">
+                    {fmtAvg(g.res.avg_minutes, hasData)}
+                  </td>
+                </>
+              ) : null}
             </tr>
             <tr className="border-b border-slate-100 dark:border-slate-700/80">
               <td className="px-2 py-2.5 text-slate-500 dark:text-slate-400">
@@ -322,12 +448,16 @@ function StatsKmResTable({
               <td className="px-2 py-2.5 text-center tabular-nums text-slate-600 dark:text-slate-300">
                 {fmtSubs(c.res.subs_in, c.res.subs_out, hasData)}
               </td>
-              <td className="px-2 py-2.5 text-center tabular-nums text-slate-600 dark:text-slate-300">
-                {fmtSubs(g.km.subs_in, g.km.subs_out, hasData)}
-              </td>
-              <td className="px-2 py-2.5 text-center tabular-nums text-slate-600 dark:text-slate-300">
-                {fmtSubs(g.res.subs_in, g.res.subs_out, hasData)}
-              </td>
+              {showTotal ? (
+                <>
+                  <td className="px-2 py-2.5 text-center tabular-nums text-slate-600 dark:text-slate-300">
+                    {fmtSubs(g.km.subs_in, g.km.subs_out, hasData)}
+                  </td>
+                  <td className="px-2 py-2.5 text-center tabular-nums text-slate-600 dark:text-slate-300">
+                    {fmtSubs(g.res.subs_in, g.res.subs_out, hasData)}
+                  </td>
+                </>
+              ) : null}
             </tr>
             <tr>
               <td className="px-2 py-2.5 text-slate-500 dark:text-slate-400">
@@ -353,26 +483,30 @@ function StatsKmResTable({
               >
                 {goalsCell(c.res, hasData)}
               </td>
-              <td
-                className={cn(
-                  "px-2 py-2.5 text-center tabular-nums font-semibold",
-                  titleClassName.includes("red")
-                    ? "text-red-600 dark:text-red-300"
-                    : "text-brand",
-                )}
-              >
-                {goalsCell(g.km, hasData)}
-              </td>
-              <td
-                className={cn(
-                  "px-2 py-2.5 text-center tabular-nums font-semibold",
-                  titleClassName.includes("red")
-                    ? "text-red-600 dark:text-red-300"
-                    : "text-brand",
-                )}
-              >
-                {goalsCell(g.res, hasData)}
-              </td>
+              {showTotal ? (
+                <>
+                  <td
+                    className={cn(
+                      "px-2 py-2.5 text-center tabular-nums font-semibold",
+                      titleClassName.includes("red")
+                        ? "text-red-600 dark:text-red-300"
+                        : "text-brand",
+                    )}
+                  >
+                    {goalsCell(g.km, hasData)}
+                  </td>
+                  <td
+                    className={cn(
+                      "px-2 py-2.5 text-center tabular-nums font-semibold",
+                      titleClassName.includes("red")
+                        ? "text-red-600 dark:text-red-300"
+                        : "text-brand",
+                    )}
+                  >
+                    {goalsCell(g.res, hasData)}
+                  </td>
+                </>
+              ) : null}
             </tr>
           </tbody>
         </table>
@@ -384,25 +518,103 @@ function StatsKmResTable({
 function PlayerHistoryTab({ profile }: { profile: SfvPlayerProfileData }) {
   const hasClubs = profile.clubHistory.length > 0;
   const hasTransfers = profile.transferHistory.length > 0;
+  const oefbRows = profile.oefbProfileVereine ?? [];
+  const hasOefb = oefbRows.length > 0;
 
-  if (!hasClubs && !hasTransfers) {
+  if (!hasClubs && !hasTransfers && !hasOefb) {
     return (
       <div className="px-4 py-10 text-center text-sm text-slate-500 sm:px-6 dark:text-slate-400">
         Für diesen Spieler liegen noch keine Vereinsstationen oder Transfers in der
-        Datenbank vor.
+        Datenbank vor, und es konnte keine Vereinsliste von der öffentlichen ÖFB-Seite
+        geladen werden (Profil-Link in den Metadaten fehlt oder ÖFB nicht erreichbar).
       </div>
     );
   }
 
   return (
     <div className="space-y-8 p-4 sm:p-6">
+      {hasOefb ? (
+        <section>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            Vereine (ÖFB)
+          </h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Stationen wie auf der öffentlichen Spielerseite des ÖFB — ohne Tore und
+            Einsätze.{" "}
+            {profile.oefbProfileUrl ? (
+              <a
+                href={profile.oefbProfileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand hover:underline"
+              >
+                Quelle: oefb.at
+              </a>
+            ) : null}
+          </p>
+          <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/80 dark:bg-slate-800/40">
+            <table className="w-max max-w-full border-collapse text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-white text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-700/80 dark:bg-slate-800/60">
+                  <th className="whitespace-nowrap py-2.5 pl-3 pr-3 text-left sm:pr-4">
+                    Seit
+                  </th>
+                  <th className="min-w-[12rem] py-2.5 pr-3 sm:pr-4">Verein</th>
+                </tr>
+              </thead>
+              <tbody>
+                {oefbRows.map((row, i) => (
+                  <tr
+                    key={`${row.name}-${row.ab ?? ""}-${i}`}
+                    className="text-slate-700 dark:text-slate-200"
+                  >
+                    <td className="py-2.5 pl-3 pr-3 tabular-nums text-slate-600 dark:text-slate-400 sm:pr-4">
+                      {formatDateDe(row.ab)}
+                    </td>
+                    <td className="py-2.5 pr-3 font-medium sm:pr-4">
+                      {row.url ? (
+                        <a
+                          href={row.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-brand hover:underline"
+                        >
+                          {row.name}
+                        </a>
+                      ) : (
+                        row.name
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       <section>
         <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
           Bisherige Vereine & Mannschaften
         </h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
           Sortierung: aktuelle Station zuerst, danach nach Ende der Zuordnung (neu nach
-          alt).
+          alt). Einsätze/Tore je Zeile: Summe aus aktueller Import-Saison und allen
+          Saisons in{" "}
+          <code className="rounded bg-slate-100 px-1 text-[11px] dark:bg-slate-700">
+            stats.seasons
+          </code>{" "}
+          dieser Mitgliedschaft. Verein und Mannschaft kommen aus dem ScoutBase-Import;
+          „Von“ nutzt{" "}
+          <code className="rounded bg-slate-100 px-1 text-[11px] dark:bg-slate-700">
+            joined_on
+          </code>{" "}
+          oder typische Meta-Felder (z. B. im Verein seit). Weitere Stationen erscheinen,
+          sobald mehrere{" "}
+          <code className="rounded bg-slate-100 px-1 text-[11px] dark:bg-slate-700">
+            team_memberships
+          </code>{" "}
+          (inkl. beendet) in der Datenbank liegen.
         </p>
         <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/80 dark:bg-slate-800/40">
           <table className="w-max max-w-full border-collapse text-left text-[13px]">
@@ -446,12 +658,12 @@ function PlayerHistoryTab({ profile }: { profile: SfvPlayerProfileData }) {
                     </td>
                     <td className="py-2.5 pr-3 font-medium sm:pr-4">
                       {row.verein_id ? (
-                        <Link
+                        <ProfilePreviewLink
                           href={`/vereine/${encodeURIComponent(row.verein_id)}`}
                           className="text-brand hover:underline"
                         >
                           {row.verein_name}
-                        </Link>
+                        </ProfilePreviewLink>
                       ) : (
                         row.verein_name
                       )}
@@ -551,21 +763,41 @@ function PlayerHistoryTab({ profile }: { profile: SfvPlayerProfileData }) {
 function PlayerStatsTab({ profile }: { profile: SfvPlayerProfileData }) {
   const [season, setSeason] = useState("__current__");
   const sk = profile.statsTables.dataSeasonKey;
+  const bySeason = profile.statsTablesBySeason ?? { [sk]: profile.statsTables };
 
-  const options = useMemo(() => buildSeasonOptions(), []);
+  const options = useMemo(() => buildSeasonOptionsFromProfile(profile), [profile]);
 
-  const hasData =
-    season === "__current__" || season === sk;
+  const resolvedSeasonKey = season === "__current__" ? sk : season;
+  const activeTables =
+    bySeason[resolvedSeasonKey] ??
+    (resolvedSeasonKey === sk
+      ? profile.statsTables
+      : emptyProfileStatsTables(sk));
+  const hasData = true;
+  const showTotalColumns = resolvedSeasonKey === sk;
+  const currentColumnLabel =
+    resolvedSeasonKey === sk
+      ? "aktuelle Saison"
+      : `Saison ${resolvedSeasonKey}`;
 
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-6 flex flex-col items-stretch justify-end gap-3 sm:flex-row sm:items-center">
         <p className="flex-1 text-xs text-slate-500 dark:text-slate-400">
-          Saison wählen: Importdaten sind derzeit der Saison{" "}
+          Saison wählen: Kader-Import für{" "}
           <span className="font-semibold text-slate-700 dark:text-slate-300">
             {sk}
-          </span>{" "}
-          zugeordnet. Ältere Saisons folgen mit historisierten Stats.
+          </span>
+          . Für die fünf vorangegangenen Saisons gilt: bei früherer Saison nur die
+          Spalten dieser Saison (ohne „Gesamt“). Historische Werte aus{" "}
+          <code className="rounded bg-slate-100 px-1 text-[11px] dark:bg-slate-700">
+            stats.seasons
+          </code>{" "}
+          oder Demo-Auffüllung (Development /{" "}
+          <code className="rounded bg-slate-100 px-1 text-[11px] dark:bg-slate-700">
+            SCOUTBASE_FICTIVE_SEASON_STATS=1
+          </code>
+          ).
         </p>
         <label className="flex shrink-0 flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
           Saison
@@ -586,23 +818,88 @@ function PlayerStatsTab({ profile }: { profile: SfvPlayerProfileData }) {
       <StatsKmResTable
         title="Statistik Meisterschaft"
         titleClassName="text-slate-800 dark:text-slate-200"
-        block={profile.statsTables.meisterschaft}
+        block={activeTables.meisterschaft}
         hasData={hasData}
+        currentColumnLabel={currentColumnLabel}
+        showTotalColumns={showTotalColumns}
       />
 
       <StatsKmResTable
         title="Statistik Cup"
         titleClassName="text-slate-800 dark:text-slate-200"
-        block={profile.statsTables.cup}
+        block={activeTables.cup}
         hasData={hasData}
         cupMode
+        currentColumnLabel={currentColumnLabel}
+        showTotalColumns={showTotalColumns}
       />
     </div>
   );
 }
 
-export function PlayerProfileView({ profile }: { profile: SfvPlayerProfileData }) {
+/**
+ * Gleiche URL-Kette wie die Spielerliste (Vereine 100/320, dann ÖFB 100/320).
+ */
+function ProfileHeroPhoto({
+  fotoPublicUid,
+  displayName,
+}: {
+  fotoPublicUid: string | null | undefined;
+  displayName: string;
+}) {
+  const candidates = useMemo(
+    () => buildPlayerPhotoUrlCandidates(fotoPublicUid),
+    [fotoPublicUid],
+  );
+
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setAttempt(0);
+  }, [candidates.join("|")]);
+
+  const src = attempt < candidates.length ? candidates[attempt]! : null;
+
+  if (!src) {
+    return (
+      <span
+        className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-slate-100 text-3xl font-bold text-slate-600 ring-2 ring-slate-200/70 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600/60 sm:h-32 sm:w-32"
+        aria-hidden
+      >
+        {initials(displayName)}
+      </span>
+    );
+  }
+
+  return (
+    <Image
+      key={src}
+      src={src}
+      width={128}
+      height={128}
+      alt={displayName}
+      unoptimized
+      className="h-28 w-28 shrink-0 rounded-full object-cover ring-2 ring-slate-200/90 dark:ring-slate-600/80 sm:h-32 sm:w-32"
+      sizes="128px"
+      onError={() => setAttempt((a) => a + 1)}
+    />
+  );
+}
+
+export function PlayerProfileView({
+  profile,
+  showBackToDirectory = true,
+  variant = "page",
+}: {
+  profile: SfvPlayerProfileData;
+  /** Im Profil-Modal ausblenden (Navigation über Modal-Kopf). */
+  showBackToDirectory?: boolean;
+  /** Schmale Spalte: Hero + Infokarten gestapelt, keine 2-Spalten-Übersicht. */
+  variant?: "page" | "modal";
+}) {
+  const isModal = variant === "modal";
   const [tab, setTab] = useState<TabId>("overview");
+  const [compareOpen, setCompareOpen] = useState(false);
 
   const pos = profile.primary?.position_label ?? null;
   const positionLabelForChip =
@@ -625,68 +922,65 @@ export function PlayerProfileView({ profile }: { profile: SfvPlayerProfileData }
     return { kind: "categories" as const, cats: slotColorsForLabel(pos) };
   }, [profile.primaryPositions, profile.secondaryPositions, pos]);
 
-  const photoUrl = buildOefbPlayerPhotoUrl(profile.person.foto_public_uid, "320x320");
-
   const birthYear = profile.birthYear;
-
-  const sublineParts: string[] = [];
-  if (birthYear != null) {
-    sublineParts.push(`Jg. ${birthYear}`);
-  }
-  if (profile.primary) {
-    sublineParts.push(
-      `${profile.primary.verein_name} (${profile.primary.liga_label ?? "—"})`,
-    );
-  }
 
   const foot = footLabel(profile.person.strong_foot);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Link
-          href="/spieler"
-          className="inline-flex w-fit items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/80"
-        >
-          ← Spielerübersicht
-        </Link>
-        <Link
-          href="/spieler"
+      <div
+        className={cn(
+          "flex flex-col gap-3 sm:flex-row sm:items-center",
+          showBackToDirectory ? "sm:justify-between" : "sm:justify-end",
+        )}
+      >
+        {showBackToDirectory ? (
+          <Link
+            href="/spieler"
+            className="inline-flex w-fit items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/80"
+          >
+            ← Spielerübersicht
+          </Link>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setCompareOpen(true)}
           className="inline-flex w-fit items-center rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand/90"
         >
           Spieler vergleichen
-        </Link>
+        </button>
+        <PlayerCompareModal
+          open={compareOpen}
+          onClose={() => setCompareOpen(false)}
+          baseProfile={profile}
+        />
       </div>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-slate-700/80 dark:bg-slate-800/40 dark:shadow-none">
-        <div className="flex flex-col gap-6 p-6 lg:flex-row lg:items-start lg:gap-10">
-          <div className="flex shrink-0 gap-5">
-            {photoUrl ? (
-              <Image
-                src={photoUrl}
-                width={128}
-                height={128}
-                alt=""
-                className="h-28 w-28 shrink-0 rounded-full object-cover ring-2 ring-slate-200/90 dark:ring-slate-600/80 sm:h-32 sm:w-32"
-                sizes="128px"
-              />
-            ) : (
-              <span
-                className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-slate-100 text-3xl font-bold text-slate-600 ring-2 ring-slate-200/70 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600/60 sm:h-32 sm:w-32"
-                aria-hidden
-              >
-                {initials(profile.displayName)}
-              </span>
-            )}
-            <div className="min-w-0 lg:hidden">
-              <PositionChip label={positionLabelForChip} />
-            </div>
-          </div>
+        <div
+          className={cn(
+            "flex flex-col gap-6 p-6 sm:flex-row sm:items-start sm:gap-6",
+            !isModal && "lg:gap-10",
+            isModal && "p-4 sm:p-5",
+          )}
+        >
+          <ProfileHeroPhoto
+            key={profile.person.id}
+            fotoPublicUid={profile.person.foto_public_uid}
+            displayName={profile.displayName}
+          />
 
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+            <div className="flex flex-wrap items-start justify-between gap-3 gap-y-4">
+              <div className="min-w-0 flex-1">
+                <h1
+                  className={cn(
+                    "flex flex-wrap items-center gap-x-2 gap-y-1 font-bold tracking-tight text-slate-900 dark:text-slate-100",
+                    isModal
+                      ? "text-xl sm:text-2xl"
+                      : "text-2xl sm:text-3xl",
+                  )}
+                >
                   <span>{profile.displayName}</span>
                   {profile.person.profile_verified ? (
                     <ProfileVerifiedBadge />
@@ -697,26 +991,38 @@ export function PlayerProfileView({ profile }: { profile: SfvPlayerProfileData }
                     </span>
                   ) : null}
                 </h1>
-                {sublineParts.length > 0 ? (
-                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                    {sublineParts.join(" · ")}
+                <div className="mt-2 space-y-1 text-sm">
+                  {profile.primary ? (
+                    <>
+                      <p className="font-medium leading-snug text-slate-800 dark:text-slate-100">
+                        {profile.primary.verein_name}
+                      </p>
+                      <p className="leading-snug text-slate-500 dark:text-slate-400">
+                        {profile.primary.liga_label ?? "—"}
+                      </p>
+                    </>
+                  ) : null}
+                  <p className="leading-snug text-slate-500 dark:text-slate-400">
+                    Position:{" "}
+                    {positionLabelForChip?.trim()
+                      ? positionLabelForChip
+                      : "—"}
                   </p>
-                ) : null}
+                  <p className="leading-snug text-slate-500 dark:text-slate-400">
+                    Geburtsjahr:{" "}
+                    {birthYear != null ? birthYear : "—"}
+                  </p>
+                </div>
               </div>
-              <div className="hidden lg:block">
-                <PositionChip label={positionLabelForChip} />
+              <div className="flex shrink-0 flex-col items-end justify-start">
+                <div className="w-fit min-w-[5.25rem]">
+                  <StatTile
+                    label="Rating"
+                    value={String(profile.rating)}
+                    highlight
+                  />
+                </div>
               </div>
-            </div>
-
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatTile label="Spiele" value={String(profile.totals.appearances)} />
-              <StatTile label="Tore" value={String(profile.totals.goals)} accent />
-              <StatTile label="Karten" value={String(profile.totals.cards)} />
-              <StatTile
-                label="Rating"
-                value={String(profile.rating)}
-                highlight
-              />
             </div>
           </div>
         </div>
@@ -759,98 +1065,78 @@ export function PlayerProfileView({ profile }: { profile: SfvPlayerProfileData }
             <div className="space-y-6 p-4 sm:p-6">
             <div>
               <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                Aktuelle Statistiken ({profile.seasonLabel})
+                Aktuelle Statistiken (
+                {profile.aktuelleStats?.seasonLabel ?? profile.seasonLabel})
               </h2>
-              <div className="mt-3 overflow-x-auto">
-                <div className="inline-block w-max max-w-full rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/80 dark:bg-slate-800/40">
-                <table className="w-max max-w-full border-collapse text-left text-[13px]">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-white text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-700/80 dark:bg-slate-800/60">
-                      <th className="whitespace-nowrap py-2.5 pl-3 pr-4 text-left sm:pr-6">
-                        Verein
-                      </th>
-                      <th className="max-w-[14rem] whitespace-normal py-2.5 pr-4 text-left sm:pr-6">
-                        Liga
-                      </th>
-                      <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
-                        Einsätze
-                      </th>
-                      <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
-                        Tore
-                      </th>
-                      <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
-                        Einw.
-                      </th>
-                      <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
-                        Ausw.
-                      </th>
-                      <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
-                        Gelb
-                      </th>
-                      <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
-                        Gelb-Rot
-                      </th>
-                      <th className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
-                        Rot
-                      </th>
-                      <th className="whitespace-nowrap py-2.5 pl-2 pr-3 text-right tabular-nums sm:pr-4">
-                        Ø Min.
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {profile.statsRow ? (
-                      <tr className="text-slate-700 dark:text-slate-200">
-                        <td className="py-2.5 pl-3 pr-4 font-medium sm:pr-6">
-                          {profile.statsRow.verein_name}
-                        </td>
-                        <td className="max-w-[14rem] py-2.5 pr-4 text-slate-600 dark:text-slate-400 sm:pr-6">
-                          {profile.statsRow.liga_label ?? "—"}
-                        </td>
-                        <td className="px-2 py-2.5 text-right tabular-nums">
-                          {profile.statsRow.stats.appearances}
-                        </td>
-                        <td className="px-2 py-2.5 text-right tabular-nums text-brand">
-                          {profile.statsRow.stats.goals}
-                        </td>
-                        <td className="px-2 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">
-                          {profile.statsRow.stats.subs_in || "—"}
-                        </td>
-                        <td className="px-2 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">
-                          {profile.statsRow.stats.subs_out || "—"}
-                        </td>
-                        <td className="px-2 py-2.5 text-right tabular-nums">
-                          {profile.statsRow.stats.yellow}
-                        </td>
-                        <td className="px-2 py-2.5 text-right tabular-nums">
-                          {profile.statsRow.stats.yellow_red}
-                        </td>
-                        <td className="px-2 py-2.5 text-right tabular-nums">
-                          {profile.statsRow.stats.red}
-                        </td>
-                        <td className="py-2.5 pl-2 pr-3 text-right tabular-nums text-slate-500 dark:text-slate-400 sm:pr-4">
-                          {profile.statsRow.stats.avg_minutes != null
-                            ? `${Math.round(profile.statsRow.stats.avg_minutes)}`
-                            : "—"}
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr>
-                        <td
-                          colSpan={10}
-                          className="px-3 py-8 text-center text-slate-500 dark:text-slate-400"
-                        >
-                          Keine Mannschafts-Zuordnung mit Statistik.
-                        </td>
-                      </tr>
+              <div className="mt-3">
+                {profile.aktuelleStats ? (
+                  <div
+                    className={cn(
+                      "flex flex-col gap-4",
+                      profile.aktuelleStats.res != null
+                        ? "lg:flex-row lg:items-start lg:gap-4"
+                        : "",
                     )}
-                  </tbody>
-                </table>
-                </div>
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        KM
+                      </p>
+                      <div className="overflow-x-auto">
+                        <CurrentSeasonStatsTable
+                          verein_name={profile.aktuelleStats.km.verein_name}
+                          liga_label={profile.aktuelleStats.km.liga_label}
+                          line={profile.aktuelleStats.km.line}
+                        />
+                      </div>
+                    </div>
+                    {profile.aktuelleStats.res ? (
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Reserve
+                        </p>
+                        <div className="overflow-x-auto">
+                          <CurrentSeasonStatsTable
+                            verein_name={profile.aktuelleStats.res.verein_name}
+                            liga_label={profile.aktuelleStats.res.liga_label}
+                            line={profile.aktuelleStats.res.line}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : profile.statsRow ? (
+                  <div className="overflow-x-auto">
+                    <CurrentSeasonStatsTable
+                      verein_name={profile.statsRow.verein_name}
+                      liga_label={profile.statsRow.liga_label}
+                      line={{
+                        appearances: profile.statsRow.stats.appearances,
+                        minutes: profile.statsRow.stats.minutes_total,
+                        avg_minutes: profile.statsRow.stats.avg_minutes,
+                        subs_in: profile.statsRow.stats.subs_in,
+                        subs_out: profile.statsRow.stats.subs_out,
+                        goals: profile.statsRow.stats.goals,
+                        yellow: profile.statsRow.stats.yellow,
+                        yellow_red: profile.statsRow.stats.yellow_red,
+                        red: profile.statsRow.stats.red,
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-slate-200/80 bg-white px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700/80 dark:bg-slate-800/40 dark:text-slate-400">
+                    Keine Mannschafts-Zuordnung mit Statistik.
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div
+              className={cn(
+                "grid gap-6",
+                isModal ? "grid-cols-1" : "lg:grid-cols-2",
+              )}
+            >
               <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/80 dark:bg-slate-800/40">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                   Persönliche Informationen
@@ -929,12 +1215,12 @@ export function PlayerProfileView({ profile }: { profile: SfvPlayerProfileData }
                     k="Aktueller Verein"
                     v={
                       profile.primary ? (
-                        <Link
+                        <ProfilePreviewLink
                           href={`/vereine/${encodeURIComponent(profile.primary.verein_id)}`}
                           className="font-medium text-brand hover:underline"
                         >
                           {profile.primary.verein_name}
-                        </Link>
+                        </ProfilePreviewLink>
                       ) : (
                         "—"
                       )
@@ -1161,20 +1447,6 @@ function ProfileVerifiedBadge() {
   );
 }
 
-function PositionChip({ label }: { label: string | null }) {
-  if (!label?.trim()) {
-    return (
-      <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-400">
-        Position —
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand dark:bg-brand/15">
-      {label}
-    </span>
-  );
-}
 
 function StatTile({
   label,
@@ -1190,7 +1462,7 @@ function StatTile({
   return (
     <div
       className={cn(
-        "rounded-xl border px-3 py-3 text-center sm:px-4",
+        "rounded-lg border px-2 py-2 text-center sm:rounded-xl sm:px-2.5 sm:py-2.5",
         highlight
           ? "border-brand/50 bg-brand/10"
           : "border-slate-200/90 bg-slate-50/90 dark:border-slate-600 dark:bg-slate-800/60",
@@ -1198,13 +1470,13 @@ function StatTile({
     >
       <div
         className={cn(
-          "text-xl font-bold tabular-nums sm:text-2xl",
+          "text-lg font-bold tabular-nums sm:text-xl",
           highlight ? "text-brand" : accent ? "text-brand" : "text-slate-900 dark:text-slate-100",
         )}
       >
         {value}
       </div>
-      <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 sm:text-[10px]">
         {label}
       </div>
     </div>

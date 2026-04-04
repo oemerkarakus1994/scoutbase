@@ -62,7 +62,7 @@ function parseArgs(argv) {
     }
   }
 
-  if (!["current", "all", "sfv"].includes(options.scope)) {
+  if (!["current", "all", "sfv", "sfv-5y"].includes(options.scope)) {
     throw new Error(`Unsupported scope: ${options.scope}`);
   }
 

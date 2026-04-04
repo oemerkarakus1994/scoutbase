@@ -3,7 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
+import { useProfilePreview } from "@/components/profile-preview-context";
+import { ProfilePreviewLink } from "@/components/profile-preview-link";
 import { IconSearch } from "@/components/ui/dashboard-icons";
 import { cn } from "@/lib/cn";
 import { buildOefbPlayerPhotoUrl } from "@/lib/oefb-assets";
@@ -12,10 +15,10 @@ import type { SfvClubRow } from "@/lib/sfv-data";
 type ViewMode = "table" | "grid";
 
 const FILTER_PANEL =
-  "rounded-2xl bg-[#252b3a] px-4 py-4 text-[#e8eaef] shadow-[0_12px_32px_-8px_rgba(15,23,42,0.28)] sm:px-5 sm:py-5";
-const FILTER_MUTED = "text-[#8b95a8]";
+  "rounded-2xl border border-border bg-panel px-4 py-4 text-foreground shadow-[0_12px_32px_-8px_rgba(0,0,0,0.2)] dark:border-white/10 dark:bg-panel-elevated dark:text-[#e8eaef] sm:px-5 sm:py-5";
+const FILTER_MUTED = "text-muted";
 const FILTER_INPUT =
-  "mt-1 h-9 w-full rounded-lg border border-white/[0.12] bg-[#323a4d] px-2.5 text-sm text-white shadow-inner outline-none transition placeholder:text-[#6b7289] focus:border-white/25 focus:ring-1 focus:ring-white/15";
+  "mt-1 h-9 w-full rounded-lg border border-border bg-card px-2.5 text-sm text-foreground shadow-inner outline-none transition placeholder:text-muted focus:border-brand/40 focus:ring-1 focus:ring-brand/20 dark:border-white/[0.12] dark:bg-[#323a4d] dark:text-white dark:placeholder:text-[#6b7289] dark:focus:border-brand/50";
 
 type TableSortKey =
   | "name"
@@ -350,8 +353,9 @@ export function VereineDirectory({ rows, ligaOptions }: Props) {
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-4">
           <p className="text-[11px] text-[#6b7289]">
-            Region und Liga aus Verband bzw. Team-Wettbewerb. Stadion, Kapazität
-            und Gründungsjahr aus Vereins-Meta, falls im Import gesetzt.
+            Region und Liga aus Verband bzw. Team-Wettbewerb. Stadion zuerst aus
+            Vereins-/Team-Meta, sonst häufigster Heim-Spielort aus importierten
+            Spielen (`venue_name`). Kapazität und Gründung aus Meta, falls gesetzt.
           </p>
           <button
             type="button"
@@ -394,6 +398,8 @@ function VereineTable({
   sortDir: "asc" | "desc";
   onSort: (k: TableSortKey) => void;
 }) {
+  const router = useRouter();
+  const profilePreview = useProfilePreview();
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-slate-700/80 dark:bg-slate-800/40 dark:shadow-none">
       <div className="overflow-x-auto">
@@ -474,16 +480,31 @@ function VereineTable({
                   c.logo_public_uid,
                   "100x100",
                 );
+                const go = () => {
+                  if (profilePreview) {
+                    profilePreview.openVerein(c.verein_id);
+                  } else {
+                    router.push(
+                      `/vereine/${encodeURIComponent(c.verein_id)}`,
+                    );
+                  }
+                };
                 return (
                   <tr
                     key={c.verein_id}
-                    className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-700/30"
+                    role="link"
+                    tabIndex={0}
+                    className="cursor-pointer transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-700/30"
+                    onClick={go}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        go();
+                      }
+                    }}
                   >
                     <td className="px-5 py-3">
-                      <Link
-                        href={`/vereine/${encodeURIComponent(c.verein_id)}`}
-                        className="flex items-center gap-3"
-                      >
+                      <div className="flex items-center gap-3">
                         {logoUrl ? (
                           <Image
                             src={logoUrl}
@@ -504,7 +525,7 @@ function VereineTable({
                         <span className="font-bold text-slate-900 dark:text-slate-100">
                           {c.name}
                         </span>
-                      </Link>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                       {c.region_label ?? "—"}
@@ -554,7 +575,7 @@ function VereineGrid({ rows }: { rows: SfvClubRow[] }) {
         const logoUrl = buildOefbPlayerPhotoUrl(c.logo_public_uid, "100x100");
         return (
           <li key={c.verein_id}>
-            <Link
+            <ProfilePreviewLink
               href={`/vereine/${encodeURIComponent(c.verein_id)}`}
               className="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-shadow hover:shadow-md dark:border-slate-700/80 dark:bg-slate-800/40 dark:hover:bg-slate-800/60"
             >
@@ -608,7 +629,7 @@ function VereineGrid({ rows }: { rows: SfvClubRow[] }) {
                   <div className="mt-0.5 text-[11px] text-slate-400">Gegr.</div>
                 </div>
               </div>
-            </Link>
+            </ProfilePreviewLink>
           </li>
         );
       })}

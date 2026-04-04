@@ -1,8 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { isPlayerRole } from "@/lib/sfv-data";
+import { buildOefbPlayerPhotoUrl } from "@/lib/oefb-assets";
+import { isPlayerRole, teamDisplayLabelForDashboard } from "@/lib/sfv-data";
 
 const TEAM_CHUNK = 55;
+/** `.in("id", …)` pro Query — nicht alle Teams laden, wenn nur SFV-IDs erlaubt sind. */
+const TEAM_QUERY_CHUNK = 200;
 
 type MembershipRow = {
   person_id: string | null;
@@ -41,11 +44,24 @@ export type SfvKaderContext = {
   personApps: Map<string, number>;
   personCards: Map<string, number>;
   teamGoals: Map<string, number>;
-  teamMeta: Map<string, { vereinId: string | null; name: string }>;
+  teamMeta: Map<
+    string,
+    { vereinId: string | null; name: string; meta: unknown }
+  >;
   vereinName: Map<string, string>;
+  /** Vereinswappen (ÖFB-CDN), Schlüssel Vereins-ID */
+  vereinLogoUrl: Map<string, string | null>;
   /** Gewählte Mannschaft für Subtitle / Primärzuordnung (z. B. meiste Tore). */
   personPrimaryTeamId: Map<string, string>;
   subtitleForPerson: (personId: string) => string;
+};
+
+export type BuildSfvKaderContextOptions = {
+  /**
+   * Nur diese Mannschafts-IDs (z. B. SFV / Region Salzburg).
+   * `null`: alle Mannschaften. Leeres Set: keine (leere Aggregation).
+   */
+  teamIdsAllowed?: Set<string> | null;
 };
 
 /**
@@ -53,22 +69,50 @@ export type SfvKaderContext = {
  */
 export async function buildSfvKaderContext(
   supabase: SupabaseClient,
+  options?: BuildSfvKaderContextOptions,
 ): Promise<SfvKaderContext> {
-  const { data: teamRows, error: eTeams } = await supabase
-    .schema("core")
-    .from("teams")
-    .select("id,verein_id,name");
+  const allow = options?.teamIdsAllowed;
+  let teams: Array<{
+    id: string;
+    verein_id: string | null;
+    name: string;
+    meta: unknown;
+  }> = [];
 
-  if (eTeams) {
-    throw new Error(eTeams.message);
+  if (allow != null) {
+    if (allow.size === 0) {
+      teams = [];
+    } else {
+      const ids = [...allow];
+      for (let i = 0; i < ids.length; i += TEAM_QUERY_CHUNK) {
+        const chunk = ids.slice(i, i + TEAM_QUERY_CHUNK);
+        const { data: teamRows, error: eTeams } = await supabase
+          .schema("core")
+          .from("teams")
+          .select("id,verein_id,name,meta")
+          .in("id", chunk);
+        if (eTeams) {
+          throw new Error(eTeams.message);
+        }
+        teams.push(...(teamRows ?? []));
+      }
+    }
+  } else {
+    const { data: teamRows, error: eTeams } = await supabase
+      .schema("core")
+      .from("teams")
+      .select("id,verein_id,name,meta");
+
+    if (eTeams) {
+      throw new Error(eTeams.message);
+    }
+    teams = teamRows ?? [];
   }
-
-  const teams = teamRows ?? [];
   const teamIds = teams.map((t) => t.id);
   const teamMeta = new Map(
     teams.map((t) => [
       t.id,
-      { vereinId: t.verein_id, name: t.name },
+      { vereinId: t.verein_id, name: t.name, meta: t.meta },
     ]),
   );
 
@@ -140,14 +184,19 @@ export async function buildSfvKaderContext(
   ] as string[];
 
   const vereinName = new Map<string, string>();
+  const vereinLogoUrl = new Map<string, string | null>();
   if (vereinIds.length > 0) {
     const { data: vrows } = await supabase
       .schema("core")
       .from("vereine")
-      .select("id,name")
+      .select("id,name,logo_public_uid")
       .in("id", vereinIds);
     for (const v of vrows ?? []) {
       vereinName.set(v.id, v.name);
+      vereinLogoUrl.set(
+        v.id,
+        buildOefbPlayerPhotoUrl(v.logo_public_uid, "100x100"),
+      );
     }
   }
 
@@ -163,7 +212,7 @@ export async function buildSfvKaderContext(
     const vName = tm.vereinId
       ? (vereinName.get(tm.vereinId) ?? "Verein")
       : "Verein";
-    return `${vName} · ${tm.name}`;
+    return `${vName} · ${teamDisplayLabelForDashboard(tm.name, tm.meta)}`;
   }
 
   return {
@@ -173,6 +222,7 @@ export async function buildSfvKaderContext(
     teamGoals,
     teamMeta,
     vereinName,
+    vereinLogoUrl,
     personPrimaryTeamId,
     subtitleForPerson,
   };

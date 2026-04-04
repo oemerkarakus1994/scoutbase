@@ -18,7 +18,7 @@ export function ThemeToggle() {
     return (
       <button
         type="button"
-        className="rounded-full p-2 text-slate-600 dark:text-slate-400"
+        className="rounded-full p-2 text-muted"
         aria-hidden
         tabIndex={-1}
       >
@@ -35,8 +35,7 @@ export function ThemeToggle() {
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={cn(
         "rounded-full p-2 transition-colors",
-        "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-        "dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+        "text-muted hover:bg-panel hover:text-foreground",
       )}
       aria-label={isDark ? "Hellmodus aktivieren" : "Dunkelmodus aktivieren"}
       aria-pressed={isDark}

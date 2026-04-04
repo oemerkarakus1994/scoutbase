@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+
+import { ProfilePreviewLink } from "@/components/profile-preview-link";
 import { useMemo, useState } from "react";
 
 import { IconSearch } from "@/components/ui/dashboard-icons";
@@ -12,10 +13,10 @@ import type { SfvTrainerDirectoryRow } from "@/lib/sfv-trainer-directory";
 type ViewMode = "table" | "grid";
 
 const FILTER_PANEL =
-  "rounded-2xl bg-[#252b3a] px-4 py-4 text-[#e8eaef] shadow-[0_12px_32px_-8px_rgba(15,23,42,0.28)] sm:px-5 sm:py-5";
-const FILTER_MUTED = "text-[#8b95a8]";
+  "rounded-2xl border border-border bg-panel px-4 py-4 text-foreground shadow-[0_12px_32px_-8px_rgba(0,0,0,0.2)] dark:border-white/10 dark:bg-panel-elevated dark:text-[#e8eaef] sm:px-5 sm:py-5";
+const FILTER_MUTED = "text-muted";
 const FILTER_INPUT =
-  "mt-1 h-9 w-full rounded-lg border border-white/[0.12] bg-[#323a4d] px-2.5 text-sm text-white shadow-inner outline-none transition placeholder:text-[#6b7289] focus:border-white/25 focus:ring-1 focus:ring-white/15";
+  "mt-1 h-9 w-full rounded-lg border border-border bg-card px-2.5 text-sm text-foreground shadow-inner outline-none transition placeholder:text-muted focus:border-brand/40 focus:ring-1 focus:ring-brand/20 dark:border-white/[0.12] dark:bg-[#323a4d] dark:text-white dark:placeholder:text-[#6b7289] dark:focus:border-brand/50";
 
 const LICENSE_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Alle Lizenzen" },
@@ -533,7 +534,7 @@ function TrainerTable({
                     className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-700/30"
                   >
                     <td className="px-5 py-3">
-                      <Link
+                      <ProfilePreviewLink
                         href={`/spieler/${encodeURIComponent(p.id)}`}
                         className="flex items-center gap-3"
                       >
@@ -557,7 +558,7 @@ function TrainerTable({
                         <span className="font-bold text-slate-900 dark:text-slate-100">
                           {p.name}
                         </span>
-                      </Link>
+                      </ProfilePreviewLink>
                     </td>
                     <td className="max-w-[200px] px-4 py-3 text-slate-600 dark:text-slate-300">
                       <span className="line-clamp-2 leading-snug">
@@ -613,7 +614,7 @@ function TrainerGrid({ rows }: { rows: SfvTrainerDirectoryRow[] }) {
         const photoUrl = buildVereinePersonPhotoUrl(p.foto_public_uid, "100x100");
         return (
           <li key={p.id}>
-            <Link
+            <ProfilePreviewLink
               href={`/spieler/${encodeURIComponent(p.id)}`}
               className="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-shadow hover:shadow-md dark:border-slate-700/80 dark:bg-slate-800/40 dark:hover:bg-slate-800/60"
             >
@@ -676,7 +677,7 @@ function TrainerGrid({ rows }: { rows: SfvTrainerDirectoryRow[] }) {
                 </span>
                 <span className="ml-1 text-slate-400">Siegquote</span>
               </div>
-            </Link>
+            </ProfilePreviewLink>
           </li>
         );
       })}

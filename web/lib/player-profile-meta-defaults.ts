@@ -6,6 +6,8 @@ export type PersonProfileMetaParsed = {
   profile_verified: boolean;
   primary_positions: string[];
   secondary_positions: string[];
+  /** Manuelle „Heimat“-Mannschaft (UUID), nur wenn gültige aktuelle Membership existiert. */
+  primary_team_id: string | null;
 };
 
 /** Bekannte Import-IDs aus älteren Manifesten (Meta-Migration). */
@@ -70,5 +72,6 @@ export function mergeScoutbaseProfileMeta(
       parsed.secondary_positions.length > 0
         ? parsed.secondary_positions
         : ["LV"],
+    primary_team_id: parsed.primary_team_id,
   };
 }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { resolvePersonFotoPublicUid } from "./oefb-assets";
 import { bundeslandFromVerbandName } from "./oefb-bundesland";
 import { loadPositionLabelsForPrimaryTeams } from "./player-position-category";
 import { scoutbaseRating99 } from "./player-rating";
@@ -471,6 +472,7 @@ export async function fetchSfvPlayerDirectory(
       nachname: string | null;
       geburtsdatum: string | null;
       foto_public_uid: string | null;
+      meta: unknown;
     }> = [];
 
     for (let i = 0; i < personIds.length; i += ID_CHUNK) {
@@ -478,7 +480,7 @@ export async function fetchSfvPlayerDirectory(
       const { data, error } = await supabase
         .schema("core")
         .from("personen")
-        .select("id,display_name,vorname,nachname,geburtsdatum,foto_public_uid")
+        .select("id,display_name,vorname,nachname,geburtsdatum,foto_public_uid,meta")
         .in("id", chunk);
 
       if (error) {
@@ -488,10 +490,12 @@ export async function fetchSfvPlayerDirectory(
     }
 
     const rowsRaw: SfvPlayerDirectoryRow[] = persons.map((p) => {
+      const { meta, ...rest } = p;
       const g = ctx.personGoals.get(p.id) ?? 0;
       const a = ctx.personApps.get(p.id) ?? 0;
       return {
-        ...p,
+        ...rest,
+        foto_public_uid: resolvePersonFotoPublicUid(rest.foto_public_uid, meta),
         verein_team: ctx.subtitleForPerson(p.id),
         goals: g,
         appearances: a,

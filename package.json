@@ -10,7 +10,9 @@
     "crawl:sfv": "node scripts/run-sfv-crawl.mjs",
     "build:competition:sfv": "node scripts/build-competition-content-manifest.mjs --verband-source-id=5ac4e17caa6271317678",
     "build:team-targets:sfv": "node scripts/build-team-targets.mjs --scope=sfv --competition-manifest-suffix=sfv --output-suffix=sfv",
+    "build:team-targets:sfv-5y": "node scripts/build-team-targets-multi-season.mjs",
     "collect:team-pages:sfv": "node scripts/collect-team-pages.mjs --scope=sfv",
+    "collect:team-pages:sfv-5y": "node scripts/collect-team-pages.mjs --scope=sfv-5y --types=kader",
     "build:team-content:sfv": "node scripts/build-team-content-manifest.mjs --scope=sfv",
     "collect:assets": "node scripts/collect-assets.mjs",
     "build:discovery": "node scripts/build-discovery-manifest.mjs",
@@ -31,7 +33,12 @@
     "import:discovery:sfv": "node scripts/import-discovery-to-supabase.mjs --sfv-only",
     "import:competition:sfv": "node scripts/import-competition-content-to-supabase.mjs --suffix=sfv",
     "import:team:sfv": "node scripts/import-team-content-to-supabase.mjs --suffix=sfv",
+    "merge:kader-season-stats": "node scripts/merge-kader-season-stats-from-extracts.mjs",
+    "apply:membership-season-patch": "node scripts/apply-membership-season-patch.mjs",
+    "seed:fictive-membership-seasons": "node scripts/seed-fictive-membership-season-stats.mjs",
     "import:sfv": "node scripts/import-sfv-to-supabase.mjs",
+    "collect:sportplatz:sfv": "node scripts/collect-sportplatz-meta.mjs",
+    "import:sportplatz:sfv": "node scripts/import-sportplatz-meta-to-supabase.mjs",
     "enrich:photos:sfv": "node scripts/enrich-person-photos-from-manifest.mjs --suffix=sfv",
     "db:push": "supabase db push"
   }

@@ -1,9 +1,9 @@
-import Image from "next/image";
+"use client";
 
-import {
-  buildOefbPlayerPhotoUrl,
-  buildVereinePersonPhotoUrl,
-} from "@/lib/oefb-assets";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+
+import { buildPlayerPhotoUrlCandidates } from "@/lib/oefb-assets";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -31,9 +31,19 @@ export function PlayerAvatar({
 }: Props) {
   const isLarge = size === "lg";
   const px = isLarge ? 160 : size === "sm" ? 32 : 40;
-  const url = isLarge
-    ? buildOefbPlayerPhotoUrl(fotoPublicUid, "320x320")
-    : buildVereinePersonPhotoUrl(fotoPublicUid, "100x100");
+
+  const candidates = useMemo(
+    () => buildPlayerPhotoUrlCandidates(fotoPublicUid),
+    [fotoPublicUid],
+  );
+
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setAttempt(0);
+  }, [candidates.join("|")]);
+
+  const src = attempt < candidates.length ? candidates[attempt]! : null;
 
   const box = isLarge
     ? "h-40 w-40 text-4xl font-semibold"
@@ -41,19 +51,22 @@ export function PlayerAvatar({
       ? "h-8 w-8 text-[10px]"
       : "h-10 w-10 text-[11px]";
 
-  if (url) {
+  if (src) {
     return (
       <Image
-        src={url}
+        key={src}
+        src={src}
         width={px}
         height={px}
         alt=""
+        unoptimized
         className={cn(
           "shrink-0 rounded-full object-cover ring-1 ring-slate-200/80",
           box,
           className,
         )}
         sizes={isLarge ? "160px" : `${px}px`}
+        onError={() => setAttempt((a) => a + 1)}
       />
     );
   }

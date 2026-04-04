@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 
+import { useProfilePreview } from "@/components/profile-preview-context";
 import { IconSearch } from "@/components/ui/dashboard-icons";
 import { cn } from "@/lib/cn";
 import {
@@ -19,7 +20,7 @@ import {
 
 const DEBOUNCE_MS = 280;
 const INPUT_CLASS =
-  "h-10 w-full rounded-full border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-800 outline-none ring-brand/0 transition placeholder:text-slate-400 focus:border-brand/40 focus:bg-white focus:ring-2 focus:ring-brand/20 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-brand/50 dark:focus:bg-slate-800";
+  "h-10 w-full rounded-full border border-border bg-card pl-10 pr-4 text-sm text-foreground outline-none ring-brand/0 transition placeholder:text-muted focus:border-brand focus:bg-card focus:ring-2 focus:ring-brand/25";
 
 type Props = {
   className?: string;
@@ -28,6 +29,7 @@ type Props = {
 
 export function GlobalSearchInput({ className, inputClassName }: Props) {
   const router = useRouter();
+  const profilePreview = useProfilePreview();
   const listId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -100,6 +102,18 @@ export function GlobalSearchInput({ className, inputClassName }: Props) {
     setPanelDismissed(true);
     setValue("");
     setItems([]);
+    if (s.entity === "liga") {
+      router.push(searchSuggestionHref(s));
+      return;
+    }
+    if (profilePreview) {
+      if (s.entity === "person") {
+        profilePreview.openPerson(s.id);
+      } else {
+        profilePreview.openVerein(s.id);
+      }
+      return;
+    }
     router.push(searchSuggestionHref(s));
   }
 
@@ -130,7 +144,7 @@ export function GlobalSearchInput({ className, inputClassName }: Props) {
   return (
     <div ref={containerRef} className={cn("relative z-[60]", className)}>
       <label className="relative block w-full">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
           <IconSearch />
         </span>
         <input
@@ -161,14 +175,14 @@ export function GlobalSearchInput({ className, inputClassName }: Props) {
         <ul
           id={listId}
           role="listbox"
-          className="absolute left-0 right-0 top-[calc(100%+6px)] max-h-[min(60vh,320px)] overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-900"
+          className="absolute left-0 right-0 top-[calc(100%+6px)] max-h-[min(60vh,320px)] overflow-auto rounded-xl border border-border bg-card py-1 shadow-xl shadow-black/40"
         >
           {loading ? (
-            <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
+            <li className="px-3 py-2 text-sm text-muted">
               Suche…
             </li>
           ) : items.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
+            <li className="px-3 py-2 text-sm text-muted">
               Keine Treffer
             </li>
           ) : (
@@ -183,8 +197,8 @@ export function GlobalSearchInput({ className, inputClassName }: Props) {
                   className={cn(
                     "flex flex-col gap-0.5 px-3 py-2 text-left text-sm transition-colors",
                     i === highlight
-                      ? "bg-brand/10 text-slate-900 dark:bg-brand/15 dark:text-slate-100"
-                      : "text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800/80",
+                      ? "bg-brand/15 text-foreground"
+                      : "text-foreground hover:bg-panel",
                   )}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={(e) => {
@@ -194,7 +208,7 @@ export function GlobalSearchInput({ className, inputClassName }: Props) {
                   onMouseEnter={() => setHighlight(i)}
                 >
                   <span className="font-medium">{s.name}</span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                  <span className="text-xs text-muted">
                     {s.kindLabel}
                   </span>
                 </Link>

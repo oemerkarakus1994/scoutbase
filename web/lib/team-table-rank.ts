@@ -1,13 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+function normTeamName(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 /**
  * Tabellenplatz und Teilnehmerzahl aus dem neuesten Tabellen-Snapshot
  * zu einer der angegebenen Bewerb-Editionen.
+ * `teamName`: Fallback, wenn `team_id` in der Snapshot-Zeile fehlt (Import).
  */
 export async function fetchTeamTableRankContext(
   supabase: SupabaseClient,
   teamId: string,
   editionIds: string[],
+  teamName?: string | null,
 ): Promise<{ rank: number | null; teamsInLeague: number | null }> {
   if (!editionIds.length) {
     return { rank: null, teamsInLeague: null };
@@ -26,7 +32,7 @@ export async function fetchTeamTableRankContext(
     return { rank: null, teamsInLeague: null };
   }
 
-  const { data: row, error: e2 } = await supabase
+  const { data: rowById, error: e2 } = await supabase
     .schema("core")
     .from("tabellen_snapshot_rows")
     .select("rank")
@@ -38,6 +44,20 @@ export async function fetchTeamTableRankContext(
     return { rank: null, teamsInLeague: null };
   }
 
+  let rank = rowById?.rank ?? null;
+  if (rank == null && teamName?.trim()) {
+    const { data: allRows } = await supabase
+      .schema("core")
+      .from("tabellen_snapshot_rows")
+      .select("rank,team_name")
+      .eq("snapshot_id", snap.id);
+    const n = normTeamName(teamName);
+    const found = (allRows ?? []).find(
+      (r) => normTeamName(String(r.team_name ?? "")) === n,
+    );
+    rank = found?.rank ?? null;
+  }
+
   const { count, error: e3 } = await supabase
     .schema("core")
     .from("tabellen_snapshot_rows")
@@ -45,11 +65,11 @@ export async function fetchTeamTableRankContext(
     .eq("snapshot_id", snap.id);
 
   if (e3) {
-    return { rank: row?.rank ?? null, teamsInLeague: null };
+    return { rank, teamsInLeague: null };
   }
 
   return {
-    rank: row?.rank ?? null,
+    rank,
     teamsInLeague: count ?? null,
   };
 }

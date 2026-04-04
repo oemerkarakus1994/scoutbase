@@ -97,6 +97,8 @@ function sanitizeQuery(raw: string): string {
 
 /**
  * Globale Schnellsuche: Personen (Spieler/Trainer), Vereine, Ligen/Bewerbe (Editionstitel).
+ * Mannschaftsnamen (`core.teams`) werden auf den zugehörigen Verein gemappt — pro Verein
+ * höchstens ein Treffer (KM/RES umschalten auf dem Vereinsprofil).
  */
 export async function fetchSearchSuggestions(
   supabase: SupabaseClient,
@@ -135,7 +137,7 @@ export async function fetchSearchSuggestions(
           /** Viele Treffer: gleicher Ligatitel existiert pro Saison als eigene Edition. */
           .limit(80);
 
-  const [r1, r2, r3, rv, rLiga] = await Promise.all([
+  const [r1, r2, r3, rv, rLiga, rTeams] = await Promise.all([
     base().ilike("display_name", pattern).limit(8),
     base().ilike("vorname", pattern).limit(8),
     base().ilike("nachname", pattern).limit(8),
@@ -146,9 +148,16 @@ export async function fetchSearchSuggestions(
       .ilike("name", pattern)
       .limit(10),
     ligaQuery,
+    supabase
+      .schema("core")
+      .from("teams")
+      .select("verein_id")
+      .ilike("name", pattern)
+      .limit(48),
   ]);
 
-  const err = r1.error ?? r2.error ?? r3.error ?? rv.error ?? rLiga.error;
+  const err =
+    r1.error ?? r2.error ?? r3.error ?? rv.error ?? rLiga.error ?? rTeams.error;
   if (err) {
     return { suggestions: [], error: err.message };
   }
@@ -223,14 +232,74 @@ export async function fetchSearchSuggestions(
     entity: "person" as const,
   }));
 
-  const vereinSugs: SearchSuggestion[] = (rv.data ?? [])
-    .filter((v) => v.id && v.name?.trim())
-    .map((v) => ({
+  const vereinById = new Map<string, string>();
+  for (const v of rv.data ?? []) {
+    if (v.id && v.name?.trim()) {
+      vereinById.set(v.id, v.name.trim());
+    }
+  }
+
+  const teamVereinIds = new Set<string>();
+  for (const t of rTeams.data ?? []) {
+    if (t.verein_id) {
+      teamVereinIds.add(t.verein_id);
+    }
+  }
+
+  const missingVereinIds = [...teamVereinIds].filter((id) => !vereinById.has(id));
+  if (missingVereinIds.length > 0) {
+    const { data: vExtra } = await supabase
+      .schema("core")
+      .from("vereine")
+      .select("id, name")
+      .in("id", missingVereinIds);
+    for (const v of vExtra ?? []) {
+      if (v.id && v.name?.trim()) {
+        vereinById.set(v.id, v.name.trim());
+      }
+    }
+  }
+
+  /** Gleicher Vereinsname kann mehrfach in `core.vereine` vorkommen — in der Suche nur ein Treffer. */
+  const normVereinName = (n: string) => n.trim().toLowerCase();
+  const vereinNameSeen = new Set<string>();
+  const vereinSugs: SearchSuggestion[] = [];
+
+  for (const v of rv.data ?? []) {
+    const name = v.name?.trim();
+    if (!v.id || !name) {
+      continue;
+    }
+    const key = normVereinName(name);
+    if (vereinNameSeen.has(key)) {
+      continue;
+    }
+    vereinNameSeen.add(key);
+    vereinSugs.push({
       id: v.id,
-      name: v.name!.trim(),
+      name,
       kindLabel: "Verein",
-      entity: "verein" as const,
-    }));
+      entity: "verein",
+    });
+  }
+
+  for (const vid of teamVereinIds) {
+    const name = vereinById.get(vid);
+    if (!name) {
+      continue;
+    }
+    const key = normVereinName(name);
+    if (vereinNameSeen.has(key)) {
+      continue;
+    }
+    vereinNameSeen.add(key);
+    vereinSugs.push({
+      id: vid,
+      name,
+      kindLabel: "Verein",
+      entity: "verein",
+    });
+  }
 
   const ligaRows = dedupeBewerbEditionsByTitle(
     (rLiga.data ?? []) as BewerbEditionLigaRow[],

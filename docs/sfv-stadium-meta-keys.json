@@ -1,0 +1,40 @@
+{
+  "$comment": "Referenz: ÖFB/SFV JSON und Vereins-meta — Reihenfolge für stadion_label in parseVereinStadiumMeta",
+  "source_notes": [
+    "Spielobjekte: competition-content-manifest.sfv.json (spielort*, spielfeldBezeichnung)",
+    "Vereine: core.vereine.meta (Import-Felder je nach Skript)"
+  ],
+  "stadion_label_priority": [
+    "spielfeldBezeichnung",
+    "stadion_name",
+    "stadion",
+    "stadium_name",
+    "stadium",
+    "venue_name",
+    "sportanlage_name",
+    "sportplatz_name",
+    "heimstaette",
+    "heimstätte",
+    "spielortBezeichnung",
+    "spielort"
+  ],
+  "capacity_keys": [
+    "capacity",
+    "kapazitaet",
+    "stadium_capacity",
+    "stadion_kapazitaet"
+  ],
+  "founded_year_keys": [
+    "gegruendet",
+    "founded_year",
+    "gruendungsjahr"
+  ],
+  "examples_spielfeldBezeichnung": [
+    "Alpenstadion Tamsweg",
+    "Steinbergstadion"
+  ],
+  "examples_spielortBezeichnung": [
+    "Tamsweg - Alpenstadion (Alpenstadion Tamsweg)",
+    "Stadion Grödig (Kunstrasenfeld)"
+  ]
+}

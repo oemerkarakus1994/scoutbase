@@ -716,6 +716,14 @@ export async function buildTeamContentManifest(options = {}) {
           yellow_red_cards: player.kartenGelbRot ?? null,
           red_cards: player.kartenRot ?? null,
           blue_cards: Boolean(player.blueCards),
+          /** ÖFB Profil / erweiterte Kader-Daten (optional) */
+          minutes:
+            player.einsatzminuten ?? player.minuten ?? player.einsatzMinuten ?? null,
+          minutes_per_game:
+            player.minutenProSpiel ??
+            player.minuten_pro_spiel ??
+            player.durchschnittlicheSpielzeit ??
+            null,
         },
         contact: {},
         meta: {},

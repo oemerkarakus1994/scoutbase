@@ -78,6 +78,16 @@ export function extractAllAppPreloads(html) {
 
     try {
       const { endIndex, value } = extractBalancedJson(html, equalsIndex + 1);
+      const prev = result[preloadId];
+      if (prev != null) {
+        const lenP = JSON.stringify(prev).length;
+        const lenV = JSON.stringify(value).length;
+        /** ÖFB dupliziert dieselbe Preload-ID (z. B. leeres `{}` nach großem Payload). */
+        if (lenV <= lenP) {
+          startIndex = endIndex;
+          continue;
+        }
+      }
       result[preloadId] = value;
       startIndex = endIndex;
     } catch {
